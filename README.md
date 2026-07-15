@@ -1,60 +1,110 @@
-# Final Pipeline
+# Shipment Journey Intelligence
 
-Self-contained frozen final shipment ETA and material-delay evaluation. It generates its own deterministic synthetic data and never imports or reads root-repository `src/` or `data/` at runtime.
+SAFiRi AI Intern take-home: a reproducible prototype that predicts shipment final ETA and material-delay risk from milestone-based shipment snapshots.
 
-## Requirements
+This repository contains the **final frozen pipeline** only. The accompanying technical report covers methodology, experiments, findings, and limitations; this README focuses on setup, execution, and repository navigation.
 
-Install `requirements.txt` into a Python 3.11+ environment.
+## Quick start
 
-## Run
+### Requirements
+
+- Python 3.11+
+- Git
+
+The pipeline generates deterministic synthetic data locally. No external data download or credentials are needed.
+
+### Setup and run
 
 ```bash
-cd final_pipeline
+git clone https://github.com/longtraan06/SAFIRI_TAKEHOME.git
+cd SAFIRI_TAKEHOME
+
+python3 -m venv .venv-safiri
+source .venv-safiri/bin/activate
+
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
 python run_pipeline.py --clean --run-tests
+```
+
+For Windows PowerShell, activate the environment with:
+
+```powershell
+.\.venv-safiri\Scripts\Activate.ps1
+```
+
+`--clean` removes generated files under `data/` and `outputs/` only, then recreates them.
+
+### Other commands
+
+```bash
+# Run the pipeline without cleaning existing generated artifacts
+python run_pipeline.py
+
+# Run tests only
 python -m unittest discover -s tests -v
 ```
 
-From the parent repository, run `python final_pipeline/run_pipeline.py --clean --run-tests` instead.
+## What the pipeline does
 
-`--clean` deletes generated contents under `final_pipeline/data/` and `final_pipeline/outputs/` only.
+One execution performs the following steps:
 
-## Package Layout
+1. Generate 250 synthetic shipment journeys using fixed seed `20260715`.
+2. Validate data chronology, reporting rules, snapshot availability, and target completeness.
+3. Split shipments by ID into train, validation, and test groups: `175 / 37 / 38`.
+4. Create EDA summaries and figures.
+5. Evaluate ETA baselines, train the frozen ETA and risk models, and write validation artifacts.
+6. Refit the frozen policy on train plus validation and reproduce the final held-out evaluation.
+7. Save metrics, predictions, figures, reports, case studies, and serialized model artifacts.
 
-`config.py` holds frozen policy constants. `src/` contains the generator, validation, grouped split, EDA, baselines, feature engineering, ETA, risk, evaluation, reporting, recommendations, and orchestration modules.
+The terminal prints ETA and Risk summary metrics and the paths to the main generated reports.
 
-This folder contains only the final selected path. The root repository remains research history; Direct/Structured HGB v1, Risk HGB v2 Core, Risk v1, and candidate-selection/tuning logic are deliberately excluded.
+## Final model policy
 
-## Data And Validation
+| Task | Frozen policy |
+| --- | --- |
+| ETA at S1 (origin departed) | Direct HGB v2 |
+| ETA at S2/S3 (port arrived/customs cleared) | Structured HGB v2 |
+| Delay risk | Risk HGB v2 Stack with Platt calibration |
+| Material-delay alert threshold | `0.29` |
 
-The generator uses seed `20260715` for 250 synthetic shipments, events, and available milestone snapshots. Validation checks the shipment population, event count, snapshot stages, duplicate snapshot IDs, and target completeness.
+The stage-routed ETA policy uses one model per snapshot; it is not an ensemble. Risk probability does not modify the ETA prediction.
 
-## Split And Validation Protocol
+## Repository layout
 
-Shipment groups are deterministically split `175/37/38` into train/validation/test. Validation trains only on train shipments and writes B0/B1/B2, ETA v2, and Risk Stack validation artifacts. It does not choose a model, calibrator, or threshold. Final reproduction refits once on train+validation and evaluates the untouched test set.
+```text
+SAFIRI_TAKEHOME/
+├── config.py            # Frozen seed, split, threshold, and model policy
+├── run_pipeline.py      # Command-line entry point
+├── requirements.txt     # Python dependencies
+├── src/                 # Data, features, ETA, risk, evaluation, reporting, and orchestration
+│   └── orchestrator.py  # End-to-end generation, training, evaluation, and reporting
+├── tests/               # Data quality, leakage, reproducibility, and output-contract tests
+├── data/                # Generated shipments, events, and snapshots
+└── outputs/             # Generated artifacts, organized by pipeline stage
+```
 
-## Frozen Policy
+`src/orchestrator.py` coordinates the final workflow. The remaining modules under `src/` separate data generation, validation, features, models, evaluation, and reporting for straightforward inspection and testing.
 
-- B0 is scheduled ETA, B1 is route-median final delay, and B2 carries the latest available observed delay forward.
-- ETA v2 routes S1 (`ORIGIN_DEPARTED`) to Direct residual HGB v2 and S2/S3 to Structured planned-deviation HGB v2.
-- Risk HGB v2 Stack uses shipment-grouped OOF route material-delay rates and OOF stage-routed ETA features.
-- Platt calibration is fitted on OOF raw probabilities only. The alert threshold is frozen at `0.29`.
+## Generated outputs
 
-## Outputs
+| Location | Contents |
+| --- | --- |
+| `outputs/01_data_quality/` | Data-quality report. |
+| `outputs/02_split/` | Shipment-level split manifest. |
+| `outputs/03_eda/` | EDA summary and figures. |
+| `outputs/04_model_validation/` | Baseline, ETA, and risk validation metrics and predictions. |
+| `outputs/05_final_evaluation/metrics/` | Final ETA, risk, and calibration metrics. |
+| `outputs/05_final_evaluation/predictions/` | Snapshot-level final ETA and risk predictions. |
+| `outputs/05_final_evaluation/reports/` | `FINAL_PIPELINE_REPORT.md` and `final_case_studies.md`. |
+| `outputs/05_final_evaluation/artifacts/` | Serialized ETA models, Risk model, and calibrator. |
 
-`data/` contains generated inputs. `outputs/` is organized by pipeline stage:
+## Reproducibility notes
 
-- `01_data_quality/`: `data_quality_report.md`.
-- `02_split/`: `split_manifest.csv`.
-- `03_eda/`: `eda_summary.md` and EDA-only `figures/`.
-- `04_model_validation/`: `baselines/`, `eta/`, `risk/`, and the frozen-policy note.
-- `05_final_evaluation/`: final `metrics/`, `predictions/`, `reports/`, model `artifacts/`, and final-only `figures/`.
+- Data generation, split assignment, models, OOF features, and calibration use fixed random states.
+- Splits are grouped by `shipment_id`; snapshots from one shipment never cross partitions.
+- Historical route features and ETA stack features are constructed out-of-fold for fitting rows.
+- The generated final test result is a reproducibility check of the frozen synthetic benchmark, not a new blind or independent evaluation.
 
-At completion, the command prints stage-routed ETA MAE/RMSE, the Risk Stack calibration/threshold and PR-AUC/Brier/F1, then the paths to the data-quality, EDA, final report, and case-study Markdown files.
-
-## Tests
-
-Focused named tests cover deterministic generation, data validation, grouped splitting, leakage-safe feature construction, baselines, ETA stage routing, Risk Stack feature slots/threshold, and the complete output/reporting contract.
-
-## Reproducibility And Limitations
-
-All generator, split, HGB, OOF, and calibration random states use the frozen seed. The final test rerun is **reproducibility verification of the frozen synthetic benchmark, not a new blind or independent evaluation**. Results are not evidence of real-world generalization or causal operational recommendations.
+For model design, metrics, and limitations, please refer to the technical report submitted with this take-home.
