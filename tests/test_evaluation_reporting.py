@@ -14,18 +14,37 @@ class EvaluationReportingTests(unittest.TestCase):
     def test_full_contract_outputs_validation_final_reports_and_clean_boundary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); (root / "unrelated.txt").write_text("keep")
-            run(root, clean=True)
-            required = {"data_quality_report.md", "split_manifest.csv", "eda_summary.md", "baseline_metrics_validation.csv", "eta_validation_metrics.csv", "eta_validation_predictions.csv", "risk_validation_metrics.csv", "risk_validation_predictions.csv", "final_test_model_comparison.csv", "final_test_predictions.csv", "final_test_risk_metrics.csv", "final_test_risk_calibration.csv", "final_test_risk_predictions.csv", "final_case_studies.md", "FINAL_PIPELINE_REPORT.md"}
-            self.assertTrue(required.issubset({path.name for path in (root / "outputs").iterdir()}))
-            self.assertTrue((root / "outputs" / "figures").is_dir())
+            summary = run(root, clean=True)
+            required = {
+                "01_data_quality/data_quality_report.md",
+                "02_split/split_manifest.csv",
+                "03_eda/eda_summary.md",
+                "04_model_validation/baselines/baseline_metrics_validation.csv",
+                "04_model_validation/eta/eta_validation_metrics.csv",
+                "04_model_validation/eta/eta_validation_predictions.csv",
+                "04_model_validation/risk/risk_validation_metrics.csv",
+                "04_model_validation/risk/risk_validation_predictions.csv",
+                "05_final_evaluation/metrics/final_test_model_comparison.csv",
+                "05_final_evaluation/predictions/final_test_predictions.csv",
+                "05_final_evaluation/metrics/final_test_risk_metrics.csv",
+                "05_final_evaluation/metrics/final_test_risk_calibration.csv",
+                "05_final_evaluation/predictions/final_test_risk_predictions.csv",
+                "05_final_evaluation/reports/final_case_studies.md",
+                "05_final_evaluation/reports/FINAL_PIPELINE_REPORT.md",
+            }
+            self.assertTrue(all((root / "outputs" / path).exists() for path in required))
+            self.assertTrue((root / "outputs" / "03_eda" / "figures").is_dir())
+            self.assertTrue((root / "outputs" / "05_final_evaluation" / "figures").is_dir())
             self.assertEqual((root / "unrelated.txt").read_text(), "keep")
-            manifest = pd.read_csv(root / "outputs" / "split_manifest.csv")
+            manifest = pd.read_csv(root / "outputs" / "02_split" / "split_manifest.csv")
             self.assertEqual(manifest.split.value_counts().to_dict(), SPLIT_COUNTS)
-            risk = pd.read_csv(root / "outputs" / "final_test_risk_predictions.csv")
+            risk = pd.read_csv(root / "outputs" / "05_final_evaluation" / "predictions" / "final_test_risk_predictions.csv")
             self.assertTrue((risk.predicted_material_delay == risk.risk_probability.ge(RISK_THRESHOLD)).all())
             self.assertTrue(risk.risk_probability.between(0, 1).all())
-            calibration = pd.read_csv(root / "outputs" / "final_test_risk_calibration.csv")
+            calibration = pd.read_csv(root / "outputs" / "05_final_evaluation" / "metrics" / "final_test_risk_calibration.csv")
             self.assertEqual(int(calibration.n.sum()), len(risk))
-            report = (root / "outputs" / "FINAL_PIPELINE_REPORT.md").read_text()
+            report = (root / "outputs" / "05_final_evaluation" / "reports" / "FINAL_PIPELINE_REPORT.md").read_text()
             self.assertIn("## 10. Limitations And Reproduction Scope", report)
             self.assertIn("not a new blind or independent evaluation", report)
+            self.assertIn("eta_mae_hours", summary)
+            self.assertIn("report_paths", summary)

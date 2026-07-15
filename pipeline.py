@@ -261,6 +261,25 @@ def calibration_table(rows: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame({"bin": bins, "probability": rows.risk_probability, "label": rows.target_is_materially_delayed}).groupby("bin", observed=False).agg(n=("label", "size"), mean_predicted_probability=("probability", "mean"), observed_material_delay_rate=("label", "mean")).reset_index().assign(bin=lambda x: x.bin.astype(str))
 
 
+def output_paths(root: Path) -> dict[str, Path]:
+    """Keep generated artifacts discoverable by pipeline stage."""
+    outputs = root / "outputs"
+    paths = {
+        "quality": outputs / "01_data_quality",
+        "split": outputs / "02_split",
+        "eda": outputs / "03_eda",
+        "validation": outputs / "04_model_validation",
+        "final": outputs / "05_final_evaluation",
+    }
+    paths["eda_figures"] = paths["eda"] / "figures"
+    paths["final_metrics"] = paths["final"] / "metrics"
+    paths["final_predictions"] = paths["final"] / "predictions"
+    paths["final_reports"] = paths["final"] / "reports"
+    paths["final_figures"] = paths["final"] / "figures"
+    paths["artifacts"] = paths["final"] / "artifacts"
+    return paths
+
+
 def fit_risk_stack(
     train_rows: pd.DataFrame,
     train_shipments: pd.DataFrame,
@@ -295,8 +314,12 @@ def fit_risk_stack(
 
 
 def write_reports(root: Path, shipments: pd.DataFrame, events: pd.DataFrame, snapshots: pd.DataFrame, manifest: pd.DataFrame, comparison: pd.DataFrame, risk: pd.DataFrame, predictions: pd.DataFrame, validation_comparison: pd.DataFrame, validation_risk: pd.DataFrame) -> None:
-    outputs=root/"outputs"; figures=outputs/"figures"; figures.mkdir(parents=True,exist_ok=True)
-    (outputs/"data_quality_report.md").write_text(f"# Data Quality\n\n- Shipments: {len(shipments)}\n- Events: {len(shipments)*5}\n- Snapshots: {len(snapshots)}\n- Validation: passed.\n",encoding="utf-8")
+    paths = output_paths(root)
+    for directory in paths.values():
+        directory.mkdir(parents=True, exist_ok=True)
+    quality, eda_dir, validation = paths["quality"], paths["eda"], paths["validation"]
+    final_reports, eda_figures, final_figures = paths["final_reports"], paths["eda_figures"], paths["final_figures"]
+    (quality/"data_quality_report.md").write_text(f"# Data Quality\n\n- Shipments: {len(shipments)}\n- Events: {len(shipments)*5}\n- Snapshots: {len(snapshots)}\n- Validation: passed.\n",encoding="utf-8")
     counts = snapshots.snapshot_stage.value_counts().reindex(STAGES, fill_value=0)
     shipment_counts_route = shipments.route.value_counts()
     shipment_counts_carrier = shipments.carrier.value_counts()
@@ -308,24 +331,24 @@ def write_reports(root: Path, shipments: pd.DataFrame, events: pd.DataFrame, sna
     availability = snapshots.groupby("snapshot_stage")[["observed_departure_delay_hours", "observed_port_arrival_delay_hours", "observed_customs_delay_hours", "truck_availability_score"]].apply(lambda x: x.notna().mean()).reindex(STAGES)
     def table(frame: pd.DataFrame) -> str:
         return "\n".join("| " + " | ".join(str(value) for value in row) + " |" for row in frame.reset_index().itertuples(index=False, name=None))
-    eda = "# EDA Summary\n\n## Shipment Counts By Route\n\n| Route | Shipments |\n| --- | ---: |\n" + table(shipment_counts_route.rename("shipments").to_frame())
-    eda += "\n\n## Shipment Counts By Carrier\n\n| Carrier | Shipments |\n| --- | ---: |\n" + table(shipment_counts_carrier.rename("shipments").to_frame())
-    eda += "\n\n## Snapshot Counts By Stage\n\n| Stage | Snapshots |\n| --- | ---: |\n" + table(counts.rename("snapshots").to_frame())
-    eda += "\n\n## Planned Duration By Route\n\n| Route | Ocean | Customs | Inland |\n| --- | ---: | ---: | ---: |\n" + table(route_duration)
-    eda += "\n\n## Final Delay Distribution And Buckets\n\n" + f"Mean={shipments.final_delay_hours.mean():.3f}h; median={shipments.final_delay_hours.median():.3f}h; standard deviation={shipments.final_delay_hours.std():.3f}h.\n\n| Bucket | Shipments |\n| --- | ---: |\n" + table(delay_buckets.rename("shipments").to_frame())
-    eda += "\n\n## Route Material Delay Rate And Median\n\n| Route | Shipments | Material delay rate | Median final delay hours |\n| --- | ---: | ---: | ---: |\n" + table(route_delay)
-    eda += "\n\n## Delay Propagation Relations\n\n| Relation | Correlation |\n| --- | ---: |\n" + table(propagation)
-    eda += "\n\n## Missing And Late Update Summary\n\n| Milestone | Events | Missing rate | Late rate |\n| --- | ---: | ---: | ---: |\n" + table(update_summary)
-    eda += "\n\n## Feature Availability By Prediction Stage\n\nValues are fractions available at S1/S2/S3.\n\n| Stage | Departure delay | Port delay | Customs delay | Truck availability |\n| --- | ---: | ---: | ---: | ---: |\n" + table(availability) + "\n"
-    (outputs/"eda_summary.md").write_text(eda, encoding="utf-8")
+    eda_summary = "# EDA Summary\n\n## Shipment Counts By Route\n\n| Route | Shipments |\n| --- | ---: |\n" + table(shipment_counts_route.rename("shipments").to_frame())
+    eda_summary += "\n\n## Shipment Counts By Carrier\n\n| Carrier | Shipments |\n| --- | ---: |\n" + table(shipment_counts_carrier.rename("shipments").to_frame())
+    eda_summary += "\n\n## Snapshot Counts By Stage\n\n| Stage | Snapshots |\n| --- | ---: |\n" + table(counts.rename("snapshots").to_frame())
+    eda_summary += "\n\n## Planned Duration By Route\n\n| Route | Ocean | Customs | Inland |\n| --- | ---: | ---: | ---: |\n" + table(route_duration)
+    eda_summary += "\n\n## Final Delay Distribution And Buckets\n\n" + f"Mean={shipments.final_delay_hours.mean():.3f}h; median={shipments.final_delay_hours.median():.3f}h; standard deviation={shipments.final_delay_hours.std():.3f}h.\n\n| Bucket | Shipments |\n| --- | ---: |\n" + table(delay_buckets.rename("shipments").to_frame())
+    eda_summary += "\n\n## Route Material Delay Rate And Median\n\n| Route | Shipments | Material delay rate | Median final delay hours |\n| --- | ---: | ---: | ---: |\n" + table(route_delay)
+    eda_summary += "\n\n## Delay Propagation Relations\n\n| Relation | Correlation |\n| --- | ---: |\n" + table(propagation)
+    eda_summary += "\n\n## Missing And Late Update Summary\n\n| Milestone | Events | Missing rate | Late rate |\n| --- | ---: | ---: | ---: |\n" + table(update_summary)
+    eda_summary += "\n\n## Feature Availability By Prediction Stage\n\nValues are fractions available at S1/S2/S3.\n\n| Stage | Departure delay | Port delay | Customs delay | Truck availability |\n| --- | ---: | ---: | ---: | ---: |\n" + table(availability) + "\n"
+    (eda_dir/"eda_summary.md").write_text(eda_summary, encoding="utf-8")
     frozen="# Frozen Policy\n\n- Seed: `20260715`; grouped split: `175/37/38`.\n- ETA: Direct residual HGB v2 at S1; Structured planned-deviation HGB v2 at S2/S3.\n- Risk: Risk HGB v2 Stack using OOF route material-delay rate and OOF stage-routed ETA features; Platt calibration; fixed threshold `0.29`.\n"
-    (outputs/"frozen_policy.md").write_text(frozen,encoding="utf-8")
+    (validation/"frozen_policy.md").write_text(frozen,encoding="utf-8")
     eta_rows = "\n".join(f"| {r.method} | {r.scope} | {r.n_snapshots} | {r.mae_hours:.3f} | {r.rmse_hours:.3f} |" for _, r in comparison.iterrows())
     risk_rows = "\n".join(f"| {r.method} | {r.scope} | {r.pr_auc:.3f} | {r.brier_score:.3f} | {r.f1:.3f} |" for _, r in risk.iterrows())
     validation_eta_rows = "\n".join(f"| {r.method} | {r.scope} | {r.n_snapshots} | {r.mae_hours:.3f} | {r.rmse_hours:.3f} |" for _, r in validation_comparison.loc[validation_comparison.method.isin(["Direct HGB v2", "Structured HGB v2", "Stage-routed v2 policy"])].iterrows())
     validation_risk_rows = "\n".join(f"| {r.method} | {r.scope} | {r.pr_auc:.3f} | {r.brier_score:.3f} | {r.f1:.3f} |" for _, r in validation_risk.iterrows())
     report = "# Final Pipeline Report\n\n## 1. Reproduction Command\n\n`python final_pipeline/run_pipeline.py --clean --run-tests`\n\n## 2. Seed, Dataset, And Grouped Split\n\nSynthetic data uses seed `20260715`: 250 shipments, five events per shipment, and milestone snapshots. Shipment groups are split train/validation/test as `175/37/38`.\n\n## 3. Data Quality\n\nThe generated dataset passed population, event-count, snapshot-ID, stage, and target-completeness validation. See `data_quality_report.md`.\n\n## 4. EDA Insights\n\n`eda_summary.md` and `figures/` document shipment route/carrier/stage counts, planned durations, final-delay distribution/buckets, route delay rates and medians, propagation correlations, update quality, and stage feature availability.\n\n## 5. Baseline Results\n\nB0 is scheduled ETA, B1 maps a train-fitted route median, and B2 carries forward the latest available observed delay. Train-only validation baseline results are in `baseline_metrics_validation.csv`.\n\n## 6. ETA Architecture\n\nThe frozen ETA policy routes S1 to Direct residual HGB v2 with an OOF route-delay prior. S2/S3 use Structured planned-deviation HGB v2 waterfall components. It is stage routing, not a test-selected ensemble.\n\n## 7. Risk Architecture\n\nRisk HGB v2 Stack uses OOF route material-delay rates and OOF stage-routed ETA features. Platt calibration is fitted only on OOF raw probabilities; the alert threshold is fixed at `0.29`.\n\n## 8. Validation And Test/Reproduction Metrics\n\nTrain-only validation uses train shipments only and is saved in the validation CSVs.\n\n### Train-only Validation ETA\n\n| Method | Scope | n | MAE | RMSE |\n| --- | --- | ---: | ---: | ---: |\n"+validation_eta_rows+"\n\n### Train-only Validation Risk\n\n| Method | Scope | PR-AUC | Brier | F1 |\n| --- | --- | ---: | ---: | ---: |\n"+validation_risk_rows+"\n\nThe following final test rerun is reproducibility verification of the frozen synthetic benchmark, **not a new blind or independent evaluation**.\n\n### Final ETA\n\n| Method | Scope | n | MAE | RMSE |\n| --- | --- | ---: | ---: | ---: |\n"+eta_rows+"\n\n### Final Risk\n\n| Method | Scope | PR-AUC | Brier | F1 |\n| --- | --- | ---: | ---: | ---: |\n"+risk_rows+"\n\n## 9. Leakage Safeguards\n\nSplits are shipment-grouped. All validation fits use train shipments only. Historical route values, risk route rates, ETA stack features, raw risk probabilities, and calibration inputs are OOF for fitting shipments. Final test maps and models use train+validation only; labels are evaluated after prediction.\n\n## 10. Limitations And Reproduction Scope\n\nThis is a deterministic synthetic reproduction. The final test rerun verifies reproducibility against frozen reference results; it is not a newly blinded, independent, or real-world generalization evaluation. Small route/stage samples and synthetic mechanisms limit operational conclusions.\n"
-    (outputs/"FINAL_PIPELINE_REPORT.md").write_text(report,encoding="utf-8")
+    (final_reports/"FINAL_PIPELINE_REPORT.md").write_text(report,encoding="utf-8")
     cases=[]
     from .src.recommendations import recommendations
     for title,row in (("S1 highest risk",predictions.loc[predictions.snapshot_stage.eq("ORIGIN_DEPARTED")].sort_values(["risk_probability","snapshot_id"],ascending=[False,True]).iloc[0]),("S2 highest structured deviation",predictions.loc[predictions.snapshot_stage.eq("PORT_ARRIVED")].assign(total=lambda x:x.predicted_customs_deviation_hours+x.predicted_post_customs_deviation_hours).sort_values(["total","snapshot_id"],ascending=[False,True]).iloc[0]),("S3 lowest risk",predictions.loc[predictions.snapshot_stage.eq("CUSTOMS_CLEARED")].sort_values(["risk_probability","snapshot_id"]).iloc[0])):
@@ -334,25 +357,25 @@ def write_reports(root: Path, shipments: pd.DataFrame, events: pd.DataFrame, sna
         if row.snapshot_stage == "CUSTOMS_CLEARED": waterfall = f"planned inland {row.planned_inland_remaining_hours:.2f}h + inland deviation {row.predicted_inland_deviation_hours:.2f}h"
         action_text = "\n".join(f"  - {action}" for action in recommendations(row, float(row.risk_probability)))
         cases.append(f"## {title}\n\n- Shipment: `{row.shipment_id}`; route: `{row.route}`; stage: `{row.snapshot_stage}`.\n- Predicted ETA: `{row.predicted_final_eta}`; predicted delay: `{row.predicted_final_delay_hours:.2f}h`.\n- Risk probability: `{row.risk_probability:.3f}`; alert at fixed 0.29: `{bool(row.predicted_material_delay)}`.\n- Waterfall: {waterfall}.\n- Rule-based recommendation:\n{action_text}\n\nActual outcome is shown only after the frozen case-selection rule above: actual final delay `{row.target_final_delay_hours:.2f}h`.\n")
-    (outputs/"final_case_studies.md").write_text("# Final Case Studies\n\n"+"\n".join(cases),encoding="utf-8")
-    axis=comparison.loc[comparison.scope.eq("ALL")].set_index("method").mae_hours.plot.barh(figsize=(8,4),color="#245b82"); axis.set_xlabel("MAE (hours)"); plt.tight_layout(); plt.savefig(figures/"regression_comparison.png",dpi=140); plt.close()
-    axis=predictions.groupby("snapshot_stage").risk_probability.mean().plot.bar(color="#e07a3f",figsize=(6,4)); axis.set_ylabel("Mean calibrated risk probability"); plt.tight_layout(); plt.savefig(figures/"risk_by_stage.png",dpi=140); plt.close()
-    axis=snapshots.snapshot_stage.value_counts().reindex(STAGES).plot.bar(color="#3f8c6a",figsize=(6,4)); axis.set_ylabel("Snapshots"); plt.tight_layout(); plt.savefig(figures/"snapshot_counts_by_stage.png",dpi=140); plt.close()
-    axis=shipments.groupby("route").final_delay_hours.mean().plot.bar(color="#b94a48",figsize=(7,4)); axis.set_ylabel("Mean final delay (hours)"); plt.xticks(rotation=20,ha="right"); plt.tight_layout(); plt.savefig(figures/"mean_delay_by_route.png",dpi=140); plt.close()
-    axis=shipments.route.value_counts().plot.bar(color="#245b82",figsize=(7,4)); axis.set_ylabel("Shipments"); plt.xticks(rotation=20,ha="right"); plt.tight_layout(); plt.savefig(figures/"shipment_counts_by_route.png",dpi=140); plt.close()
-    axis=shipments.carrier.value_counts().plot.bar(color="#245b82",figsize=(7,4)); axis.set_ylabel("Shipments"); plt.xticks(rotation=20,ha="right"); plt.tight_layout(); plt.savefig(figures/"shipment_counts_by_carrier.png",dpi=140); plt.close()
-    route_duration.plot.bar(stacked=True,figsize=(8,4),color=["#245b82", "#e07a3f", "#3f8c6a"]); plt.ylabel("Planned hours"); plt.xticks(rotation=20,ha="right"); plt.tight_layout(); plt.savefig(figures/"planned_duration_by_route.png",dpi=140); plt.close()
-    shipments.final_delay_hours.plot.hist(bins=20,figsize=(6,4),color="#e07a3f"); plt.xlabel("Final delay (hours)"); plt.tight_layout(); plt.savefig(figures/"final_delay_distribution.png",dpi=140); plt.close()
-    delay_buckets.plot.bar(figsize=(6,4),color="#3f8c6a"); plt.ylabel("Shipments"); plt.tight_layout(); plt.savefig(figures/"final_delay_buckets.png",dpi=140); plt.close()
-    route_delay.material_delay_rate.plot.bar(figsize=(7,4),color="#b94a48"); plt.ylabel("Material delay rate"); plt.xticks(rotation=20,ha="right"); plt.tight_layout(); plt.savefig(figures/"route_material_delay_rate.png",dpi=140); plt.close()
-    route_delay.median_final_delay_hours.plot.bar(figsize=(7,4),color="#e07a3f"); plt.ylabel("Median final delay (hours)"); plt.xticks(rotation=20,ha="right"); plt.tight_layout(); plt.savefig(figures/"route_median_final_delay.png",dpi=140); plt.close()
-    figure, axes = plt.subplots(1, 3, figsize=(11, 3.5)); axes[0].scatter(shipments.departure_delay_hours, shipments.port_arrival_delay_hours, s=10); axes[0].set(xlabel="Departure delay", ylabel="Port delay"); axes[1].scatter(shipments.port_arrival_delay_hours, shipments.port_arrival_delay_hours + shipments.customs_incremental_delay_hours, s=10); axes[1].set(xlabel="Port delay", ylabel="Customs delay"); axes[2].scatter(shipments.port_arrival_delay_hours + shipments.customs_incremental_delay_hours, shipments.final_delay_hours, s=10); axes[2].set(xlabel="Customs delay", ylabel="Final delay"); plt.tight_layout(); plt.savefig(figures/"delay_propagation_relations.png",dpi=140); plt.close()
-    update_summary[["missing_update_rate", "late_update_rate"]].plot.bar(figsize=(8,4)); plt.ylabel("Rate"); plt.tight_layout(); plt.savefig(figures/"missing_late_update_summary.png",dpi=140); plt.close()
-    availability.T.plot.bar(figsize=(8,4)); plt.ylabel("Available fraction"); plt.tight_layout(); plt.savefig(figures/"feature_availability_by_stage.png",dpi=140); plt.close()
+    (final_reports/"final_case_studies.md").write_text("# Final Case Studies\n\n"+"\n".join(cases),encoding="utf-8")
+    axis=comparison.loc[comparison.scope.eq("ALL")].set_index("method").mae_hours.plot.barh(figsize=(8,4),color="#245b82"); axis.set_xlabel("MAE (hours)"); plt.tight_layout(); plt.savefig(final_figures/"regression_comparison.png",dpi=140); plt.close()
+    axis=predictions.groupby("snapshot_stage").risk_probability.mean().plot.bar(color="#e07a3f",figsize=(6,4)); axis.set_ylabel("Mean calibrated risk probability"); plt.tight_layout(); plt.savefig(final_figures/"risk_by_stage.png",dpi=140); plt.close()
+    axis=snapshots.snapshot_stage.value_counts().reindex(STAGES).plot.bar(color="#3f8c6a",figsize=(6,4)); axis.set_ylabel("Snapshots"); plt.tight_layout(); plt.savefig(eda_figures/"snapshot_counts_by_stage.png",dpi=140); plt.close()
+    axis=shipments.groupby("route").final_delay_hours.mean().plot.bar(color="#b94a48",figsize=(7,4)); axis.set_ylabel("Mean final delay (hours)"); plt.xticks(rotation=20,ha="right"); plt.tight_layout(); plt.savefig(eda_figures/"mean_delay_by_route.png",dpi=140); plt.close()
+    axis=shipments.route.value_counts().plot.bar(color="#245b82",figsize=(7,4)); axis.set_ylabel("Shipments"); plt.xticks(rotation=20,ha="right"); plt.tight_layout(); plt.savefig(eda_figures/"shipment_counts_by_route.png",dpi=140); plt.close()
+    axis=shipments.carrier.value_counts().plot.bar(color="#245b82",figsize=(7,4)); axis.set_ylabel("Shipments"); plt.xticks(rotation=20,ha="right"); plt.tight_layout(); plt.savefig(eda_figures/"shipment_counts_by_carrier.png",dpi=140); plt.close()
+    route_duration.plot.bar(stacked=True,figsize=(8,4),color=["#245b82", "#e07a3f", "#3f8c6a"]); plt.ylabel("Planned hours"); plt.xticks(rotation=20,ha="right"); plt.tight_layout(); plt.savefig(eda_figures/"planned_duration_by_route.png",dpi=140); plt.close()
+    shipments.final_delay_hours.plot.hist(bins=20,figsize=(6,4),color="#e07a3f"); plt.xlabel("Final delay (hours)"); plt.tight_layout(); plt.savefig(eda_figures/"final_delay_distribution.png",dpi=140); plt.close()
+    delay_buckets.plot.bar(figsize=(6,4),color="#3f8c6a"); plt.ylabel("Shipments"); plt.tight_layout(); plt.savefig(eda_figures/"final_delay_buckets.png",dpi=140); plt.close()
+    route_delay.material_delay_rate.plot.bar(figsize=(7,4),color="#b94a48"); plt.ylabel("Material delay rate"); plt.xticks(rotation=20,ha="right"); plt.tight_layout(); plt.savefig(eda_figures/"route_material_delay_rate.png",dpi=140); plt.close()
+    route_delay.median_final_delay_hours.plot.bar(figsize=(7,4),color="#e07a3f"); plt.ylabel("Median final delay (hours)"); plt.xticks(rotation=20,ha="right"); plt.tight_layout(); plt.savefig(eda_figures/"route_median_final_delay.png",dpi=140); plt.close()
+    figure, axes = plt.subplots(1, 3, figsize=(11, 3.5)); axes[0].scatter(shipments.port_arrival_delay_hours, shipments.customs_incremental_delay_hours, s=10); axes[0].set(xlabel="Port delay", ylabel="Customs increment"); axes[1].scatter(shipments.customs_incremental_delay_hours, shipments.inland_incremental_delay_hours, s=10); axes[1].set(xlabel="Customs increment", ylabel="Inland increment"); axes[2].scatter(shipments.port_arrival_delay_hours, shipments.final_delay_hours, s=10); axes[2].set(xlabel="Port delay", ylabel="Final delay"); plt.tight_layout(); plt.savefig(eda_figures/"delay_propagation_relations.png",dpi=140); plt.close()
+    update_summary[["missing_update_rate", "late_update_rate"]].plot.bar(figsize=(8,4)); plt.ylabel("Rate"); plt.tight_layout(); plt.savefig(eda_figures/"missing_late_update_summary.png",dpi=140); plt.close()
+    availability.T.plot.bar(figsize=(8,4)); plt.ylabel("Available fraction"); plt.tight_layout(); plt.savefig(eda_figures/"feature_availability_by_stage.png",dpi=140); plt.close()
 
 
 def run(root: Path, clean: bool = False) -> dict[str, Any]:
-    root=Path(root); data=root/"data"; outputs=root/"outputs"; artifacts=outputs/"artifacts"
+    root=Path(root); data=root/"data"; outputs=root/"outputs"; paths=output_paths(root); artifacts=paths["artifacts"]
     if clean:
         # The clean boundary is intentionally limited to generated package data and outputs.
         for directory in (data, outputs):
@@ -360,9 +383,10 @@ def run(root: Path, clean: bool = False) -> dict[str, Any]:
                 for path in sorted(directory.rglob("*"), reverse=True):
                     if path.is_file(): path.unlink()
                     elif path.is_dir(): path.rmdir()
-    data.mkdir(parents=True,exist_ok=True); artifacts.mkdir(parents=True,exist_ok=True)
+    data.mkdir(parents=True,exist_ok=True)
+    for directory in paths.values(): directory.mkdir(parents=True,exist_ok=True)
     shipments,events,snapshots=generate_data(); validate(shipments,events,snapshots); manifest=make_manifest(shipments)
-    shipments.to_csv(data/"shipments.csv",index=False); events.to_csv(data/"events.csv",index=False); snapshots.to_csv(data/"snapshots.csv",index=False); manifest.to_csv(outputs/"split_manifest.csv",index=False)
+    shipments.to_csv(data/"shipments.csv",index=False); events.to_csv(data/"events.csv",index=False); snapshots.to_csv(data/"snapshots.csv",index=False); manifest.to_csv(paths["split"]/"split_manifest.csv",index=False)
     train_ids=set(manifest.loc[manifest.split.eq("train"),"shipment_id"]); validation_ids=set(manifest.loc[manifest.split.eq("validation"),"shipment_id"]); test_ids=set(manifest.loc[manifest.split.eq("test"),"shipment_id"]); trainval_ids=train_ids|validation_ids
     train_rows=snapshots.loc[snapshots.shipment_id.isin(train_ids)].copy(); validation_rows=snapshots.loc[snapshots.shipment_id.isin(validation_ids)].copy(); train_shipments=shipments.loc[shipments.shipment_id.isin(train_ids)].copy()
     # Train-only validation produces all model comparisons without selecting or tuning policy.
@@ -370,20 +394,24 @@ def run(root: Path, clean: bool = False) -> dict[str, Any]:
     _, validation_predictions=fit_risk_stack(train_rows,train_shipments,validation_rows,validation_eta)
     validation_predictions.attrs["train_shipments"]=train_shipments
     validation_comparison=regression_metrics(validation_predictions)
-    validation_comparison.loc[validation_comparison.method.isin(["B0 Scheduled ETA","B1 Route median","B2 Latest observed carry-forward"])].to_csv(outputs/"baseline_metrics_validation.csv",index=False)
-    validation_comparison.loc[validation_comparison.method.isin(["Direct HGB v2","Structured HGB v2","Stage-routed v2 policy"])].to_csv(outputs/"eta_validation_metrics.csv",index=False)
-    validation_predictions.to_csv(outputs/"eta_validation_predictions.csv",index=False)
+    baseline_dir=paths["validation"] / "baselines"; eta_dir=paths["validation"] / "eta"; risk_dir=paths["validation"] / "risk"
+    for directory in (baseline_dir, eta_dir, risk_dir): directory.mkdir(parents=True,exist_ok=True)
+    validation_comparison.loc[validation_comparison.method.isin(["B0 Scheduled ETA","B1 Route median","B2 Latest observed carry-forward"])].to_csv(baseline_dir/"baseline_metrics_validation.csv",index=False)
+    validation_comparison.loc[validation_comparison.method.isin(["Direct HGB v2","Structured HGB v2","Stage-routed v2 policy"])].to_csv(eta_dir/"eta_validation_metrics.csv",index=False)
+    validation_predictions.to_csv(eta_dir/"eta_validation_predictions.csv",index=False)
     validation_risk = risk_metrics(validation_predictions)
-    validation_risk.to_csv(outputs/"risk_validation_metrics.csv",index=False)
-    validation_predictions.to_csv(outputs/"risk_validation_predictions.csv",index=False)
+    validation_risk.to_csv(risk_dir/"risk_validation_metrics.csv",index=False)
+    validation_predictions.to_csv(risk_dir/"risk_validation_predictions.csv",index=False)
     # Only after validation artifacts are complete, refit on train+validation and score test once.
     trainval_rows=snapshots.loc[snapshots.shipment_id.isin(trainval_ids)].copy(); test=snapshots.loc[snapshots.shipment_id.isin(test_ids)].copy(); trainval_shipments=shipments.loc[shipments.shipment_id.isin(trainval_ids)].copy()
     eta_models,eta_test=fit_eta(trainval_rows,trainval_shipments,test)
     risk_models,predictions=fit_risk_stack(trainval_rows,trainval_shipments,test,eta_test)
     predictions.attrs["train_shipments"]=trainval_shipments; comparison=regression_metrics(predictions); risk=risk_metrics(predictions)
-    comparison.to_csv(outputs/"final_test_model_comparison.csv",index=False); risk.to_csv(outputs/"final_test_risk_metrics.csv",index=False); predictions.to_csv(outputs/"final_test_predictions.csv",index=False); calibration_table(predictions).to_csv(outputs/"final_test_risk_calibration.csv",index=False)
-    predictions[["shipment_id","snapshot_id","snapshot_stage","risk_raw_probability","risk_probability","risk_level","predicted_material_delay","target_is_materially_delayed"]].to_csv(outputs/"final_test_risk_predictions.csv",index=False)
+    comparison.to_csv(paths["final_metrics"]/"final_test_model_comparison.csv",index=False); risk.to_csv(paths["final_metrics"]/"final_test_risk_metrics.csv",index=False); predictions.to_csv(paths["final_predictions"]/"final_test_predictions.csv",index=False); calibration_table(predictions).to_csv(paths["final_metrics"]/"final_test_risk_calibration.csv",index=False)
+    predictions[["shipment_id","snapshot_id","snapshot_stage","risk_raw_probability","risk_probability","risk_level","predicted_material_delay","target_is_materially_delayed"]].to_csv(paths["final_predictions"]/"final_test_risk_predictions.csv",index=False)
     joblib.dump(eta_models,artifacts/"eta_v2.joblib"); joblib.dump(risk_models["risk_model"],artifacts/"risk_hgb_v2_stack.joblib"); joblib.dump(risk_models["calibrator"],artifacts/"platt_calibrator.joblib")
-    summary={"policy":"Stage-routed v2 ETA plus Risk HGB v2 Stack","seed":SEED,"split_shipments":{"train":175,"validation":37,"test":38},"test_snapshots":int(len(test)),"test_snapshots_by_stage":test.snapshot_stage.value_counts().sort_index().to_dict(),"risk_threshold":RISK_THRESHOLD,"no_post_test_tuning":True}
-    (outputs/"final_test_summary.json").write_text(json.dumps(summary,indent=2),encoding="utf-8"); write_reports(root,shipments,events,snapshots,manifest,comparison,risk,predictions,validation_comparison,validation_risk)
+    eta_summary = comparison.loc[(comparison.method == "Stage-routed v2 policy") & comparison.scope.eq("ALL")].iloc[0]
+    risk_summary = risk.loc[risk.scope.eq("ALL")].iloc[0]
+    summary={"policy":"Stage-routed v2 ETA plus Risk HGB v2 Stack","seed":SEED,"split_shipments":{"train":175,"validation":37,"test":38},"test_snapshots":int(len(test)),"test_snapshots_by_stage":test.snapshot_stage.value_counts().sort_index().to_dict(),"risk_threshold":RISK_THRESHOLD,"no_post_test_tuning":True,"eta_mae_hours":float(eta_summary.mae_hours),"eta_rmse_hours":float(eta_summary.rmse_hours),"risk_pr_auc":float(risk_summary.pr_auc),"risk_brier_score":float(risk_summary.brier_score),"risk_f1":float(risk_summary.f1),"report_paths":{"quality":"01_data_quality/data_quality_report.md","eda":"03_eda/eda_summary.md","final":"05_final_evaluation/reports/FINAL_PIPELINE_REPORT.md","cases":"05_final_evaluation/reports/final_case_studies.md"}}
+    (paths["final_reports"] / "final_test_summary.json").write_text(json.dumps(summary,indent=2),encoding="utf-8"); write_reports(root,shipments,events,snapshots,manifest,comparison,risk,predictions,validation_comparison,validation_risk)
     return summary

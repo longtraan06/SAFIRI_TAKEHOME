@@ -38,7 +38,15 @@ Shipment groups are deterministically split `175/37/38` into train/validation/te
 
 ## Outputs
 
-`data/` contains generated inputs. `outputs/` contains `data_quality_report.md`, `split_manifest.csv`, `eda_summary.md`, `figures/`, validation CSVs, final test prediction/metric/calibration CSVs, `final_case_studies.md`, `FINAL_PIPELINE_REPORT.md`, and serialized artifacts.
+`data/` contains generated inputs. `outputs/` is organized by pipeline stage:
+
+- `01_data_quality/`: `data_quality_report.md`.
+- `02_split/`: `split_manifest.csv`.
+- `03_eda/`: `eda_summary.md` and EDA-only `figures/`.
+- `04_model_validation/`: `baselines/`, `eta/`, `risk/`, and the frozen-policy note.
+- `05_final_evaluation/`: final `metrics/`, `predictions/`, `reports/`, model `artifacts/`, and final-only `figures/`.
+
+At completion, the command prints stage-routed ETA MAE/RMSE, the Risk Stack calibration/threshold and PR-AUC/Brier/F1, then the paths to the data-quality, EDA, final report, and case-study Markdown files.
 
 ## Tests
 

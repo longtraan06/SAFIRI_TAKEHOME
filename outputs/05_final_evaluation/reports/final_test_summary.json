@@ -1,0 +1,28 @@
+{
+  "policy": "Stage-routed v2 ETA plus Risk HGB v2 Stack",
+  "seed": 20260715,
+  "split_shipments": {
+    "train": 175,
+    "validation": 37,
+    "test": 38
+  },
+  "test_snapshots": 109,
+  "test_snapshots_by_stage": {
+    "CUSTOMS_CLEARED": 37,
+    "ORIGIN_DEPARTED": 36,
+    "PORT_ARRIVED": 36
+  },
+  "risk_threshold": 0.29,
+  "no_post_test_tuning": true,
+  "eta_mae_hours": 4.660546714326458,
+  "eta_rmse_hours": 6.021842542753088,
+  "risk_pr_auc": 0.6591378911005419,
+  "risk_brier_score": 0.18154642003212323,
+  "risk_f1": 0.6782608695652174,
+  "report_paths": {
+    "quality": "01_data_quality/data_quality_report.md",
+    "eda": "03_eda/eda_summary.md",
+    "final": "05_final_evaluation/reports/FINAL_PIPELINE_REPORT.md",
+    "cases": "05_final_evaluation/reports/final_case_studies.md"
+  }
+}
