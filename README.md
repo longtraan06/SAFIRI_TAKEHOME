@@ -2,7 +2,7 @@
 
 SAFiRi AI Intern take-home: a reproducible prototype that predicts shipment final ETA and material-delay risk from milestone-based shipment snapshots.
 
-This repository contains the **final frozen pipeline** only. The accompanying technical report covers methodology, experiments, findings, and limitations; this README focuses on setup, execution, and repository navigation.
+The pipeline generates synthetic shipment data, trains ETA and risk models, and produces evaluation artifacts and operational case studies.
 
 ## Quick start
 
@@ -54,28 +54,28 @@ One execution performs the following steps:
 2. Validate data chronology, reporting rules, snapshot availability, and target completeness.
 3. Split shipments by ID into train, validation, and test groups: `175 / 37 / 38`.
 4. Create EDA summaries and figures.
-5. Evaluate ETA baselines, train the frozen ETA and risk models, and write validation artifacts.
-6. Refit the frozen policy on train plus validation and reproduce the final held-out evaluation.
+5. Evaluate ETA baselines, train ETA and risk models, and write validation artifacts.
+6. Refit on train plus validation and evaluate the held-out test split.
 7. Save metrics, predictions, figures, reports, case studies, and serialized model artifacts.
 
 The terminal prints ETA and Risk summary metrics and the paths to the main generated reports.
 
-## Final model policy
+## Model configuration
 
-| Task | Frozen policy |
+| Task | Configuration |
 | --- | --- |
 | ETA at S1 (origin departed) | Direct HGB v2 |
 | ETA at S2/S3 (port arrived/customs cleared) | Structured HGB v2 |
 | Delay risk | Risk HGB v2 Stack with Platt calibration |
 | Material-delay alert threshold | `0.29` |
 
-The stage-routed ETA policy uses one model per snapshot; it is not an ensemble. Risk probability does not modify the ETA prediction.
+The ETA pipeline uses one model per snapshot stage. Risk probability does not modify the ETA prediction.
 
 ## Repository layout
 
 ```text
 SAFIRI_TAKEHOME/
-├── config.py            # Frozen seed, split, threshold, and model policy
+├── config.py            # Seed, split, threshold, and model configuration
 ├── run_pipeline.py      # Command-line entry point
 ├── requirements.txt     # Python dependencies
 ├── src/                 # Data, features, ETA, risk, evaluation, reporting, and orchestration
@@ -85,7 +85,7 @@ SAFIRI_TAKEHOME/
 └── outputs/             # Generated artifacts, organized by pipeline stage
 ```
 
-`src/orchestrator.py` coordinates the final workflow. The remaining modules under `src/` separate data generation, validation, features, models, evaluation, and reporting for straightforward inspection and testing.
+`src/orchestrator.py` coordinates the workflow. The remaining modules under `src/` separate data generation, validation, features, models, evaluation, and reporting for straightforward inspection and testing.
 
 ## Generated outputs
 
@@ -100,11 +100,9 @@ SAFIRI_TAKEHOME/
 | `outputs/05_final_evaluation/reports/` | `FINAL_PIPELINE_REPORT.md` and `final_case_studies.md`. |
 | `outputs/05_final_evaluation/artifacts/` | Serialized ETA models, Risk model, and calibrator. |
 
-## Reproducibility notes
+## Reproducibility
 
 - Data generation, split assignment, models, OOF features, and calibration use fixed random states.
 - Splits are grouped by `shipment_id`; snapshots from one shipment never cross partitions.
 - Historical route features and ETA stack features are constructed out-of-fold for fitting rows.
-- The generated final test result is a reproducibility check of the frozen synthetic benchmark, not a new blind or independent evaluation.
-
-For model design, metrics, and limitations, please refer to the technical report submitted with this take-home.
+- Outputs are written to `data/` and `outputs/`, so a reviewer can inspect the generated dataset, figures, predictions, metrics, and reports after a run.
