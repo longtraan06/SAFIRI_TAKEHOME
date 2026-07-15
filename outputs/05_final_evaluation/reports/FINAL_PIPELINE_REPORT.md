@@ -2,7 +2,7 @@
 
 ## 1. Reproduction Command
 
-`python final_pipeline/run_pipeline.py --clean --run-tests`
+`python run_pipeline.py --clean --run-tests`
 
 ## 2. Seed, Dataset, And Grouped Split
 
