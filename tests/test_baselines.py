@@ -3,9 +3,10 @@ import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from final_pipeline.src.baselines import route_median
-from final_pipeline.src.generate_data import generate_data
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from src.baselines import route_median
+from src.generate_data import generate_data
+
 
 class BaselineTests(unittest.TestCase):
     def test_route_median_uses_training_shipments(self) -> None:

@@ -1,4 +1,12 @@
-"""Frozen B0/B1/B2 baseline construction."""
-from final_pipeline.pipeline import route_median
+from __future__ import annotations
 
-__all__ = ["route_median"]
+import pandas as pd
+
+
+def route_median(shipments: pd.DataFrame, rows: pd.DataFrame) -> pd.Series:
+    values = shipments.groupby("route").final_delay_hours.median()
+    return (
+        rows.route.map(values)
+        .fillna(float(shipments.final_delay_hours.median()))
+        .astype(float)
+    )

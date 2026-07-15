@@ -3,9 +3,10 @@ import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from final_pipeline.src.generate_data import generate_data
-from final_pipeline.src.validate_data import validate
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from src.generate_data import generate_data
+from src.validate_data import validate
+
 
 class ValidateDataTests(unittest.TestCase):
     def test_valid_generated_files_pass(self) -> None:

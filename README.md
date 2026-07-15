@@ -9,15 +9,18 @@ Install `requirements.txt` into a Python 3.11+ environment.
 ## Run
 
 ```bash
-python final_pipeline/run_pipeline.py --clean --run-tests
-python -m unittest discover -s final_pipeline/tests -v
+cd final_pipeline
+python run_pipeline.py --clean --run-tests
+python -m unittest discover -s tests -v
 ```
+
+From the parent repository, run `python final_pipeline/run_pipeline.py --clean --run-tests` instead.
 
 `--clean` deletes generated contents under `final_pipeline/data/` and `final_pipeline/outputs/` only.
 
 ## Package Layout
 
-`config.py` holds frozen policy constants. `src/` exposes generator, validation, grouped split, EDA, baselines, feature engineering, ETA, risk, evaluation, reporting, and recommendation modules. `pipeline.py` remains a backward-compatible orchestration facade.
+`config.py` holds frozen policy constants. `src/` contains the generator, validation, grouped split, EDA, baselines, feature engineering, ETA, risk, evaluation, reporting, recommendations, and orchestration modules.
 
 This folder contains only the final selected path. The root repository remains research history; Direct/Structured HGB v1, Risk HGB v2 Core, Risk v1, and candidate-selection/tuning logic are deliberately excluded.
 

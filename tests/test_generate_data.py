@@ -3,9 +3,10 @@ import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from final_pipeline.config import N_SHIPMENTS, SEED
-from final_pipeline.src.generate_data import generate_data
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from config import N_SHIPMENTS, SEED
+from src.generate_data import generate_data
+
 
 class GenerateDataTests(unittest.TestCase):
     def test_seeded_generator_is_repeatable_and_complete(self) -> None:

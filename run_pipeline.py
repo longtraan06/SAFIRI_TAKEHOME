@@ -1,15 +1,14 @@
-"""Run the self-contained frozen final pipeline."""
 from __future__ import annotations
 import argparse
 import subprocess
 import sys
 from pathlib import Path
 
-# Support direct execution without reaching outside this package.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from final_pipeline.pipeline import run
-
 ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+
+from src.orchestrator import run
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -18,7 +17,18 @@ def main() -> None:
     args = parser.parse_args()
     summary = run(ROOT, clean=args.clean)
     if args.run_tests:
-        subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", str(ROOT / "tests"), "-v"], check=True)
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "unittest",
+                "discover",
+                "-s",
+                str(ROOT / "tests"),
+                "-v",
+            ],
+            check=True,
+        )
     print("\nFinal pipeline completed.")
     print(f"Reproduction evaluation: {summary['test_snapshots']} held-out snapshots.")
     print(
@@ -32,6 +42,13 @@ def main() -> None:
     )
     print("Read next:")
     for label, relative_path in summary["report_paths"].items():
-        print(f"  - {label}: final_pipeline/outputs/{relative_path}")
+        report_path = (ROOT / "outputs" / relative_path).resolve()
+        try:
+            display_path = report_path.relative_to(Path.cwd().resolve())
+        except ValueError:
+            display_path = report_path
+        print(f"  - {label}: {display_path}")
 
-if __name__ == "__main__": main()
+
+if __name__ == "__main__":
+    main()

@@ -1,4 +1,3 @@
-"""Frozen policy and filesystem configuration for the final pipeline."""
 from __future__ import annotations
 
 from pathlib import Path
