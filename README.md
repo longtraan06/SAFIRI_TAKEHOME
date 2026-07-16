@@ -6,6 +6,8 @@ The pipeline generates synthetic shipment data, trains ETA and risk models, and 
 
 For the complete technical narrative, decision history, frozen contracts, metrics, safeguards, and output map, see [`PIPELINE_SUMMARY.md`](docs/PIPELINE_SUMMARY.md).
 
+Results are deterministic under the documented environment and fixed random seed. Minor numerical differences may occur when using different versions of numerical or machine-learning dependencies; the pipeline structure, data split, and evaluation protocol remain unchanged.
+
 ## Quick start
 
 ### Requirements
