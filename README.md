@@ -1,6 +1,6 @@
 # Shipment Journey Intelligence
 
-SAFiRi AI Intern take-home: a reproducible prototype that predicts shipment final ETA and material-delay risk from milestone-based shipment snapshots.
+SAFiRi AI Internship take-home: a reproducible prototype that predicts shipment final ETA and material-delay risk from milestone-based shipment snapshots.
 
 The pipeline generates synthetic shipment data, trains ETA and risk models, and produces evaluation artifacts and operational case studies.
 
