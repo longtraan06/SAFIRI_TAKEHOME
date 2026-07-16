@@ -4,6 +4,8 @@ SAFiRi AI Intern take-home: a reproducible prototype that predicts shipment fina
 
 The pipeline generates synthetic shipment data, trains ETA and risk models, and produces evaluation artifacts and operational case studies.
 
+For the complete technical narrative, decision history, frozen contracts, metrics, safeguards, and output map, see [`PIPELINE_SUMMARY.md`](docs/PIPELINE_SUMMARY.md).
+
 ## Quick start
 
 ### Requirements
@@ -99,6 +101,10 @@ SAFIRI_TAKEHOME/
 | `outputs/05_final_evaluation/predictions/` | Snapshot-level final ETA and risk predictions. |
 | `outputs/05_final_evaluation/reports/` | `FINAL_PIPELINE_REPORT.md` and `final_case_studies.md`. |
 | `outputs/05_final_evaluation/artifacts/` | Serialized ETA models, Risk model, and calibrator. |
+
+## Automated tests
+
+The 14 automated tests protect the pipeline's main contracts rather than optimize model quality. They verify deterministic generation, data chronology and report-time rules, shipment-group split isolation, forbidden/future feature exclusion, baseline behavior, ETA routing and arithmetic, OOF route-history and ETA-stack leakage safety, disabled HGB early stopping, OOF Platt calibration inputs, the fixed Risk threshold `0.29`, bounded probabilities, clean-output boundaries, and required reports/artifacts.
 
 ## Reproducibility
 
